@@ -7,6 +7,7 @@ import pickle
 import tensorflow as tf
 from utils import *
 from batch import Batch
+import os
 
 class ConvNet(object):
     def __init__(self):
@@ -82,6 +83,8 @@ class ConvNet(object):
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
         total_batch = int(len(data) / Params.batch_size)
+
+        saver = tf.train.Saver()
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
             for epoch in range(Params.epoch):
@@ -93,6 +96,13 @@ class ConvNet(object):
                     _, cost = sess.run([optimiser, cross_entropy], feed_dict={model.input: batch_x, model.output: batch_y})
                     avg_cost += cost/total_batch
                 acc = sess.run(accuracy, feed_dict={model.input: data_t, model.output: labels_t})
+
+                # saving the model
+                if epoch % 10 == 0:
+                    checkpoint_path = os.path.join(Params.checkpoint_path, 'model.ckpt')
+                    save_path = saver.save(sess, checkpoint_path)
+                    print("model saved to {}".format(checkpoint_path))
+                    
                 print(avg_cost, acc)
 
 if __name__ == '__main__':

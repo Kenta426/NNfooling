@@ -25,4 +25,7 @@ class Params(object):
     # learning
     learning_rate = 0.0001
     batch_size = 32
-    epoch = 5000
+    epoch = 1000
+
+    # storing
+    checkpoint_path = "model/"
