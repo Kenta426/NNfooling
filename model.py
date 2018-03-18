@@ -6,6 +6,7 @@ from params import Params
 import pickle
 import tensorflow as tf
 from utils import *
+from batch import Batch
 
 class ConvNet(object):
     def __init__(self):
@@ -65,16 +66,25 @@ class ConvNet(object):
             labels = pickle.load(f)
         labels = one_hot(sorted(list(set(labels))), labels)
 
+        b = Batch(data, labels, Params.batch_size)
         cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=self.output))
         optimiser = tf.train.AdamOptimizer(Params.learning_rate).minimize(cross_entropy)
         # collect prediction in the batch
         correct_prediction = tf.equal(tf.argmax(self.pred, 1), tf.argmax(self.output, 1))
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
+        total_batch = int(len(data) / Params.batch_size)
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
-            _, acc = sess.run([optimiser, accuracy], feed_dict={model.input: data[:10], model.output: labels[:10]})
-            print(acc)
+            for epoch in range(Params.epoch):
+                b.shuffle()
+                avg_cost = 0
+                print ("{} epoch".format(epoch))
+                for i in range(total_batch):
+                    batch_x, batch_y = b.next_batch()
+                    _, cost = sess.run([optimiser, cross_entropy], feed_dict={model.input: batch_x, model.output: batch_y})
+                    avg_cost += acc/total_batch
+                print(avg_cost)
 
 if __name__ == '__main__':
     model = ConvNet()

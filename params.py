@@ -20,3 +20,5 @@ class Params(object):
 
     # learning
     learning_rate = 0.01
+    batch_size = 32
+    epoch = 5000
