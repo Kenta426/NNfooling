@@ -14,13 +14,15 @@ class ConvNet(object):
         self.char2key = Params.char2key
         self.train_data = Params.train_data
         self.train_labels = Params.train_labels
+        self.test_data = Params.test_data
+        self.test_labels = Params.test_labels
         self.input = tf.placeholder(tf.float32, [None, Params.image_dim[0]*Params.image_dim[1]])
         self.output = tf.placeholder(tf.float32, [None,  len(self.char2key.keys())])
         self.pred = self.build_model()
 
     def conv_layer(self, inputs, name = 'conv'):
         with tf.variable_scope(name):
-            weight_shape = [Params.image_dim[0], Params.image_dim[1], Params.channel, Params.num_filter]
+            weight_shape = [Params.filter_shape[0], Params.filter_shape[1], Params.channel, Params.num_filter]
             kernel = tf.get_variable('w', weight_shape, initializer = tf.truncated_normal_initializer(stddev = 0.05))
             biases = tf.get_variable('b', shape=[Params.num_filter], initializer=tf.constant_initializer(0.0))
             conv = tf.nn.conv2d(inputs, kernel, [1, 1, 1, 1], padding='SAME')
@@ -47,16 +49,16 @@ class ConvNet(object):
 
     def build_model(self):
         inputs = tf.reshape(self.input, [-1, Params.image_dim[0], Params.image_dim[1], Params.channel])
-        for i in range(Params.convolution_layer):
-            conv = self.conv_layer(inputs, 'conv-'+str(i+1))
-            pool = self.pooling_layer(conv, 'pool-'+str(i+1))
-            inputs = pool
 
-        self.final_layer = inputs
+        conv = self.conv_layer(inputs, 'conv-1')
+        pool = self.pooling_layer(conv, 'pool-1')
+
+        self.final_layer = pool
+
         output_shape = int(Params.image_dim[1] * (0.5 ** (Params.convolution_layer)))
         reshape = tf.reshape(self.final_layer, [-1, output_shape*output_shape*Params.num_filter])
-        fc = self.fully_connected(reshape, len(self.char2key.keys()), 'fc-1')
-        s_max = self.soft_max(fc, len(self.char2key.keys()), 'soft_max')
+        fc = self.fully_connected(reshape, Params.fc_unit, 'fc-1')
+        s_max = self.soft_max(fc, Params.fc_unit, 'soft_max')
         return s_max
 
     def run(self):
@@ -65,6 +67,12 @@ class ConvNet(object):
         with open(self.train_labels, 'rb') as f:
             labels = pickle.load(f)
         labels = one_hot(sorted(list(set(labels))), labels)
+
+        with open(self.test_data, 'rb') as f:
+            data_t = pickle.load(f)
+        with open(self.test_labels, 'rb') as f:
+            labels_t = pickle.load(f)
+        labels_t = one_hot(sorted(list(set(labels_t))), labels_t)
 
         b = Batch(data, labels, Params.batch_size)
         cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=self.output))
@@ -83,8 +91,9 @@ class ConvNet(object):
                 for i in range(total_batch):
                     batch_x, batch_y = b.next_batch()
                     _, cost = sess.run([optimiser, cross_entropy], feed_dict={model.input: batch_x, model.output: batch_y})
-                    avg_cost += acc/total_batch
-                print(avg_cost)
+                    avg_cost += cost/total_batch
+                acc = sess.run(accuracy, feed_dict={model.input: data_t, model.output: labels_t})
+                print(avg_cost, acc)
 
 if __name__ == '__main__':
     model = ConvNet()

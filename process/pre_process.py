@@ -27,14 +27,14 @@ def filter_data(data, save = True):
     labels = labels [np.in1d(labels, list(key2char.keys()))]
     head_dir = '../data/'
     if save:
-        with open(head_dir + 'train_data.pkl', 'wb') as f:
+        with open(head_dir + 'test_data.pkl', 'wb') as f:
             pickle.dump(images, f)
-        with open(head_dir + 'train_labels.pkl', 'wb') as f:
+        with open(head_dir + 'test_labels.pkl', 'wb') as f:
             pickle.dump(labels, f)
     return images, labels
 
 if __name__ == '__main__':
-    FILE = '../data/emnist-balanced-train.csv'
+    FILE = '../data/emnist-balanced-test.csv'
     print("loading file...")
     start = time.time()
     im, l = load_data(FILE)

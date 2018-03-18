@@ -8,7 +8,9 @@ class Params(object):
 
     # location of the data
     train_data = 'data/train_data.pkl'
+    test_data = 'data/test_data.pkl'
     train_labels = 'data/train_labels.pkl'
+    test_labels = 'data/test_labels.pkl'
 
     # input dimension
     image_dim = (28, 28)
@@ -17,8 +19,10 @@ class Params(object):
     # model configuration
     convolution_layer = 1
     num_filter = 2
+    filter_shape = (5,5)
+    fc_unit = 80
 
     # learning
-    learning_rate = 0.01
+    learning_rate = 0.0001
     batch_size = 32
     epoch = 5000
