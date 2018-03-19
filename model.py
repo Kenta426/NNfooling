@@ -8,9 +8,11 @@ import tensorflow as tf
 from utils import *
 from batch import Batch
 import os
+import matplotlib.pyplot as plt
+
 
 class ConvNet(object):
-    def __init__(self):
+    def __init__(self, fool = False):
         self.key2char = Params.key2char
         self.char2key = Params.char2key
         self.train_data = Params.train_data
@@ -19,7 +21,15 @@ class ConvNet(object):
         self.test_labels = Params.test_labels
         self.input = tf.placeholder(tf.float32, [None, Params.image_dim[0]*Params.image_dim[1]])
         self.output = tf.placeholder(tf.float32, [None,  len(self.char2key.keys())])
+        self.trainable = (not fool)
+        self.fool_trainable = fool
         self.pred = self.build_model()
+
+    def fooling_layer(self, inputs, name = 'fooling'):
+        with tf.variable_scope(name):
+            ffilter = tf.get_variable('filter', shape=[Params.image_dim[0]*Params.image_dim[1]], initializer=tf.truncated_normal_initializer(0.05))
+            self.ffilter = tf.scalar_mul(Params.alpha, ffilter)
+            return tf.nn.bias_add(inputs, self.ffilter)
 
     def conv_layer(self, inputs, name = 'conv'):
         with tf.variable_scope(name):
@@ -49,7 +59,8 @@ class ConvNet(object):
             return tf.nn.softmax(self.logits)
 
     def build_model(self):
-        inputs = tf.reshape(self.input, [-1, Params.image_dim[0], Params.image_dim[1], Params.channel])
+        inputs = self.input
+        inputs = tf.reshape(inputs, [-1, Params.image_dim[0], Params.image_dim[1], Params.channel])
 
         conv = self.conv_layer(inputs, 'conv-1')
         pool = self.pooling_layer(conv, 'pool-1')
@@ -76,36 +87,92 @@ class ConvNet(object):
         labels_t = one_hot(sorted(list(set(labels_t))), labels_t)
 
         b = Batch(data, labels, Params.batch_size)
+
+        var = tf.trainable_variables()
+        conv = [v for v in var if v.name.startswith("conv")]
+        fool = [v for v in var if v.name.startswith("fooling")]
+        fc = [v for v in var if v.name.startswith("fc")]
+        smax = [v for v in var if v.name.startswith("soft_max")]
+
+
         cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=self.output))
-        optimiser = tf.train.AdamOptimizer(Params.learning_rate).minimize(cross_entropy)
+        optimiser = tf.train.AdamOptimizer(Params.learning_rate).minimize(cross_entropy, var_list=conv + fc + smax)
         # collect prediction in the batch
         correct_prediction = tf.equal(tf.argmax(self.pred, 1), tf.argmax(self.output, 1))
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
         total_batch = int(len(data) / Params.batch_size)
 
+        learning = []
+        if self.trainable:
+            saver = tf.train.Saver()
+            with tf.Session() as sess:
+                sess.run(tf.global_variables_initializer())
+                for epoch in range(Params.epoch):
+                    b.shuffle()
+                    avg_cost = 0
+                    print ("{} epoch".format(epoch))
+                    for i in range(total_batch):
+                        batch_x, batch_y = b.next_batch()
+                        _, cost = sess.run([optimiser, cross_entropy], feed_dict={model.input: batch_x, model.output: batch_y})
+                        avg_cost += cost/total_batch
+                    acc = sess.run(accuracy, feed_dict={model.input: data_t, model.output: labels_t})
+                    learning.append(acc)
+                    # saving the model
+                    if epoch % 10 == 0:
+                        pass
+                        # checkpoint_path = os.path.join(Params.checkpoint_path, 'model.ckpt')
+                        # save_path = saver.save(sess, checkpoint_path)
+                        # print("model saved to {}".format(checkpoint_path))
+                        # print (filters)
+
+                    # print(avg_cost, acc)
+        plt.plot(learning)
+        plt.title('Epoch vs Test accuracy')
+        plt.xlabel('Epoch')
+        plt.ylabel('Test accuracy')
+        plt.show()
+
+
+    def fool(self):
+        with open(self.train_data, 'rb') as f:
+            data = pickle.load(f)
+        with open(self.train_labels, 'rb') as f:
+            labels = pickle.load(f)
+        key = sorted(list(set(labels)))
+        labels = one_hot(key, labels)
         saver = tf.train.Saver()
+
+        _, target = fool_target(key, labels[0])
+
+        var = tf.trainable_variables()
+        fool = [v for v in var if v.name.startswith("fool")]
+        print (fool)
+
+        cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=self.output))
+        optimiser = tf.train.AdamOptimizer(Params.learning_rate).minimize(cross_entropy, var_list=fool)
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
-            for epoch in range(Params.epoch):
-                b.shuffle()
-                avg_cost = 0
-                print ("{} epoch".format(epoch))
-                for i in range(total_batch):
-                    batch_x, batch_y = b.next_batch()
-                    _, cost = sess.run([optimiser, cross_entropy], feed_dict={model.input: batch_x, model.output: batch_y})
-                    avg_cost += cost/total_batch
-                acc = sess.run(accuracy, feed_dict={model.input: data_t, model.output: labels_t})
+            saver.restore(sess, "model/fool/model.ckpt")
 
+            print("Model restored.")
+            print ("true label :{}".format(np.argmax(labels[0])))
+            print ("target label :{}".format(np.argmax(target)))
+            initial = sess.run(model.pred, feed_dict={model.input: data[0].reshape(1,-1)})
+            print (initial)
+            for epoch in range(100):
+                print ("{} epoch".format(epoch))
+                for i in range(1000):
+                    c, f, cost = sess.run([cross_entropy, model.ffilter, model.pred], feed_dict={model.input: data[0].reshape(1,-1), model.output: target.reshape(1,-1)})
+                    print (f)
+                print (c, cost)
                 # saving the model
-                if epoch % 10 == 0:
-                    checkpoint_path = os.path.join(Params.checkpoint_path, 'model.ckpt')
-                    save_path = saver.save(sess, checkpoint_path)
-                    print("model saved to {}".format(checkpoint_path))
-                    
-                print(avg_cost, acc)
+            plt.imshow(f.reshape(28,28).T)
+            plt.show()
+
 
 if __name__ == '__main__':
+    tf.reset_default_graph()
     model = ConvNet()
+    # Restore variables from disk.
     model.run()
-    # print (len(model.char2key.keys()))

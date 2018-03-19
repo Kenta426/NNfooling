@@ -4,6 +4,7 @@ usuful functions
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.misc import imresize
+import random
 
 # for the assignment, we will only use horizontal and vertical aligned letters
 # E, F, H, I, T
@@ -48,3 +49,12 @@ def one_hot(key, arr):
     values = [order[a] for a in arr]
     out = np.eye(len(key))
     return out[values]
+
+def fool_target(key, arr):
+    true = np.argmax(arr)
+    print (true)
+    r = random.randint(0, len(arr)-1)
+    while r==true:
+        r = random.randint(0, len(arr)-1)
+    out = np.eye(len(key))
+    return out[true], out[r]

@@ -25,7 +25,11 @@ class Params(object):
     # learning
     learning_rate = 0.0001
     batch_size = 32
-    epoch = 1000
+    epoch = 100
 
     # storing
     checkpoint_path = "model/"
+    saved_model = "model/model.ckpt"
+
+    # fooling
+    alpha = 1
